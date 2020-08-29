@@ -31,7 +31,7 @@ jobs:
         run: |
           DOCKER_IMAGE=syuan100/keep-core
           DOCKER_PLATFORMS=linux/arm64
-          VERSION=${{ steps.keep-network.output.release }}
+          VERSION=${{ steps.keep-network.outputs.release }}
 
           TAGS="--tag ${DOCKER_IMAGE}:${VERSION}_arm64"
 
