@@ -18,10 +18,9 @@ jobs:
         with:
           fetch-depth: 0
       - 
-        uses: oprypin/find-latest-tag@v1
-        with:
-          repository: keep-network/keep-core  # The repository to scan.
-        id: keep-network  # The step ID to refer to later.
+        name: Get Previous tag
+        id: keep-network
+        uses: WyriHaximus/github-action-get-previous-tag@master
       -
         name: Checkout latest tag
         uses: actions/checkout@v2
