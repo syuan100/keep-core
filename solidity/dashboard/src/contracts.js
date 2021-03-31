@@ -21,7 +21,7 @@ import LPRewardsKEEPETH from "@keep-network/keep-ecdsa/artifacts/LPRewardsKEEPET
 import LPRewardsTBTCETH from "@keep-network/keep-ecdsa/artifacts/LPRewardsTBTCETH.json"
 import LPRewardsKEEPTBTC from "@keep-network/keep-ecdsa/artifacts/LPRewardsKEEPTBTC.json"
 import LPRewardsTBTCSaddle from "@keep-network/keep-ecdsa/artifacts/LPRewardsTBTCSaddle.json"
-import KeepOnlyPool from "@keep-network/keep-core/artifacts/KeepTokenGeyser.json"
+import KeepOnlyPool from "@keep-network/keep-core/artifacts/KeepVault.json"
 import IERC20 from "@keep-network/keep-core/artifacts/IERC20.json"
 import SaddleSwap from "./contracts-artifacts/SaddleSwap.json"
 import Web3 from "web3"
@@ -163,48 +163,21 @@ export function Deferred() {
   }
 }
 
-let ContractsDeferred = new Deferred()
-let Web3Deferred = new Deferred()
+const ContractsDeferred = new Deferred()
+const Web3Deferred = new Deferred()
 
-export let Web3Loaded = Web3Deferred.promise
-export let ContractsLoaded = ContractsDeferred.promise
+export const Web3Loaded = Web3Deferred.promise
+export const ContractsLoaded = ContractsDeferred.promise
 
 export const resolveWeb3Deferred = (web3) => {
-  Web3Deferred = new Deferred()
   Web3Deferred.resolve(web3)
-  Web3Loaded = Web3Deferred.promise
 }
 
 export const resovleContractsDeferred = (contracts) => {
-  ContractsDeferred = new Deferred()
   ContractsDeferred.resolve(contracts)
-  ContractsLoaded = ContractsDeferred.promise
 }
 
-export async function getContracts(web3) {
-  // This is a workaround for `web3.eth.net.getId()`, since on local machine
-  // returns unexpected values(eg. 105) and after calling this method the web3
-  // cannot call any other function eq `getTransaction` and doesnt throw errors.
-  // This is probably problem with `WebocketProvider`, because if we replace it
-  // with `RpcSubprovider` the result will be as expected (eg. for Mainnet
-  // returns 1).
-  const netIdDeferred = new Deferred()
-  web3.currentProvider.sendAsync(
-    {
-      jsonrpc: "2.0",
-      method: "net_version",
-      params: [],
-      id: new Date().getTime(),
-    },
-    (error, response) => {
-      if (error) {
-        netIdDeferred.reject(error)
-      } else {
-        netIdDeferred.resolve(response.result)
-      }
-    }
-  )
-  const netId = await netIdDeferred.promise
+export async function getContracts(web3, netId) {
   if (netId.toString() !== getFirstNetworkIdFromArtifact()) {
     console.error(
       `network id: ${netId}; expected network id ${getFirstNetworkIdFromArtifact()}`
