@@ -31,7 +31,6 @@ import {
   TOKEN_STAKING_CONTRACT_NAME,
   TOKEN_GRANT_CONTRACT_NAME,
   OPERATOR_CONTRACT_NAME,
-  REGISTRY_CONTRACT_NAME,
   KEEP_OPERATOR_STATISTICS_CONTRACT_NAME,
   MANAGED_GRANT_FACTORY_CONTRACT_NAME,
   KEEP_BONDING_CONTRACT_NAME,
@@ -48,19 +47,27 @@ import {
   KEEP_TOKEN_GEYSER_CONTRACT_NAME,
 } from "./constants/constants"
 
-export const CONTRACT_DEPLOY_BLOCK_NUMBER = {
-  [KEEP_TOKEN_CONTRACT_NAME]: 0,
-  [TOKEN_GRANT_CONTRACT_NAME]: 0,
-  [OPERATOR_CONTRACT_NAME]: 0,
-  [TOKEN_STAKING_CONTRACT_NAME]: 0,
-  [REGISTRY_CONTRACT_NAME]: 0,
-  [KEEP_OPERATOR_STATISTICS_CONTRACT_NAME]: 0,
-  [MANAGED_GRANT_FACTORY_CONTRACT_NAME]: 0,
-  [KEEP_BONDING_CONTRACT_NAME]: 0,
-  [TBTC_TOKEN_CONTRACT_NAME]: 0,
-  [TBTC_SYSTEM_CONTRACT_NAME]: 0,
-  [TOKEN_STAKING_ESCROW_CONTRACT_NAME]: 0,
-  [STAKING_PORT_BACKER_CONTRACT_NAME]: 0,
+const CONTRACT_DEPLOYMENT_BLOCK_CACHE = {}
+
+export const getContractDeploymentBlockNumber = async (
+  contractName,
+  web3Instance
+) => {
+  if (
+    CONTRACT_DEPLOYMENT_BLOCK_CACHE?.[contractName] !== undefined &&
+    CONTRACT_DEPLOYMENT_BLOCK_CACHE?.[contractName] !== null
+  ) {
+    return CONTRACT_DEPLOYMENT_BLOCK_CACHE[contractName]
+  }
+  const web3 = web3Instance || (await Web3Loaded)
+  const blockNumber = await contractDeployedAtBlock(
+    web3,
+    contracts[contractName].artifact
+  )
+
+  CONTRACT_DEPLOYMENT_BLOCK_CACHE[contractName] = blockNumber
+
+  return blockNumber
 }
 
 const contracts = {
@@ -156,8 +163,28 @@ export function Deferred() {
     reject = rej
   })
 
+  let isPending = true
+  let isRejected = false
+  let isFulfilled = false
+
+  const extraPromise = promise
+    .then((fn) => {
+      isFulfilled = true
+      isPending = false
+      return fn
+    })
+    .catch((e) => {
+      isRejected = true
+      isPending = false
+      throw e
+    })
+
+  extraPromise.isFulfilled = () => isFulfilled
+  extraPromise.isRejected = () => isRejected
+  extraPromise.isPending = () => isPending
+
   return {
-    promise,
+    promise: extraPromise,
     reject,
     resolve,
   }
@@ -169,8 +196,14 @@ const Web3Deferred = new Deferred()
 export const Web3Loaded = Web3Deferred.promise
 export const ContractsLoaded = ContractsDeferred.promise
 
-export const resolveWeb3Deferred = (web3) => {
-  Web3Deferred.resolve(web3)
+export const resolveWeb3Deferred = async (web3) => {
+  if (Web3Loaded.isFulfilled()) {
+    const existingWeb3 = await Web3Loaded
+    existingWeb3.setProvider(web3.currentProvider)
+    existingWeb3.eth.defaultAccount = web3.eth.defaultAccount
+  } else {
+    Web3Deferred.resolve(web3)
+  }
 }
 
 export const resovleContractsDeferred = (contracts) => {
@@ -183,6 +216,15 @@ export async function getContracts(web3, netId) {
       `network id: ${netId}; expected network id ${getFirstNetworkIdFromArtifact()}`
     )
     throw new Error("Please connect to the appropriate Ethereum network.")
+  }
+
+  if (ContractsLoaded.isFulfilled()) {
+    const existingContracts = await ContractsLoaded
+    for (const contractInstance of Object.values(existingContracts)) {
+      contractInstance.options.from = web3.eth.defaultAccount
+    }
+
+    return contracts
   }
 
   const web3Contracts = {}
@@ -206,16 +248,9 @@ export async function getContracts(web3, netId) {
   return web3Contracts
 }
 
-const getContract = async (web3, jsonArtifact, options) => {
-  const { contractName, withDeployBlock } = options
+const getContract = async (web3, jsonArtifact) => {
   const address = getContractAddress(jsonArtifact)
 
-  if (withDeployBlock) {
-    CONTRACT_DEPLOY_BLOCK_NUMBER[contractName] = await contractDeployedAtBlock(
-      web3,
-      jsonArtifact
-    )
-  }
   return createWeb3ContractInstance(web3, jsonArtifact.abi, address)
 }
 
